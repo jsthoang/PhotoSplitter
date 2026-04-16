@@ -334,7 +334,7 @@
   }
   .tile-thumb {
     flex-shrink: 0;
-    width: 64px; height: 64px;
+    width: 100px; height: 100px;
     border-radius: 6px;
     border: 1px solid var(--border);
     overflow: hidden;
@@ -652,34 +652,93 @@
   }
 
   /* ── Thumbs ── */
-  function buildThumbs(tw, th, srcX, srcY) {
-    thumbsEl.innerHTML = '';
-    tilesStrip.style.display = 'block';
-    const size = 64;
-    let n = 1;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const wrap = document.createElement('div');
-        wrap.className = 'tile-thumb';
-        wrap.title = 'Tile ' + n;
-        const tc = document.createElement('canvas');
-        tc.width = size; tc.height = size;
-        const tctx = tc.getContext('2d');
-        const aspect = tw / th;
-        let sw = size, sh = size;
-        if (aspect > 1) { sh = size / aspect; }
-        else { sw = size * aspect; }
-        tctx.drawImage(img, srcX + c * tw, srcY + r * th, tw, th, (size-sw)/2, (size-sh)/2, sw, sh);
-        const lbl = document.createElement('div');
-        lbl.className = 'tile-label'; lbl.textContent = n;
-        wrap.appendChild(tc);
-        wrap.appendChild(lbl);
-        thumbsEl.appendChild(wrap);
-        n++;
-      }
+ function buildThumbs(tw, th, srcX, srcY) {
+  thumbsEl.innerHTML = '';
+  tilesStrip.style.display = 'block';
+  const size = 100;
+  let n = 1;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const wrap = document.createElement('div');
+      wrap.className = 'tile-thumb';
+      wrap.title = 'Tile ' + n;
+
+      const tc = document.createElement('canvas');
+      tc.width = size; tc.height = size;
+      const tctx = tc.getContext('2d');
+
+      const aspect = tw / th;
+      let sw = size, sh = size;
+      if (aspect > 1) sh = size / aspect;
+      else sw = size * aspect;
+
+      tctx.drawImage(
+        img,
+        srcX + c * tw,
+        srcY + r * th,
+        tw,
+        th,
+        (size - sw) / 2,
+        (size - sh) / 2,
+        sw,
+        sh
+      );
+
+      const lbl = document.createElement('div');
+      lbl.className = 'tile-label';
+      lbl.textContent = n;
+
+      /* ➜ NÚT DOWNLOAD */
+      const btn = document.createElement('button');
+      btn.textContent = '↓';
+      btn.style.position = 'absolute';
+      btn.style.bottom = '2px';
+      btn.style.right = '2px';
+      btn.style.fontSize = '10px';
+      btn.style.width = '30%';
+      btn.style.height = '30%';
+      btn.style.cursor = 'pointer';
+      btn.style.background = 'var(--accent-dim)';
+      btn.style.color = 'var(--accent)';
+      btn.style.border = '1px solid var(--accent-border)';
+      btn.style.borderRadius = '3px';
+
+      btn.onclick = (e) => {
+        e.stopPropagation();
+
+        const off = document.createElement('canvas');
+        off.width = Math.round(tw);
+        off.height = Math.round(th);
+        const oc = off.getContext('2d');
+
+        oc.drawImage(
+          img,
+          srcX + c * tw,
+          srcY + r * th,
+          tw,
+          th,
+          0,
+          0,
+          off.width,
+          off.height
+        );
+
+        const a = document.createElement('a');
+        a.download = `tile_${n}_r${r+1}c${c+1}.png`;
+        a.href = off.toDataURL('image/png');
+        a.click();
+      };
+
+      wrap.appendChild(tc);
+      wrap.appendChild(lbl);
+      wrap.appendChild(btn);
+      thumbsEl.appendChild(wrap);
+
+      n++;
     }
   }
-
+}
   /* ── Download ── */
   function downloadAll() {
     if (!img) return;
