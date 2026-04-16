@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slice — Photo Splitter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0b0b0b;
+    --surface: #141414;
+    --surface2: #1c1c1c;
+    --border: rgba(255,255,255,0.07);
+    --border-hover: rgba(255,255,255,0.18);
+    --text: #f0ede8;
+    --muted: #666;
+    --accent: #c8f060;
+    --accent-dim: rgba(200,240,96,0.12);
+    --accent-border: rgba(200,240,96,0.35);
+    --radius: 14px;
+    --font-display: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+    opacity: 0.035;
+  }
+
+  .app {
+    position: relative; z-index: 1;
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 28px 60px;
+  }
+
+  /* Header */
+  header {
+    padding: 32px 0 28px;
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 36px;
+  }
+  .logo {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+  .logo span { color: var(--accent); }
+  .tagline {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .badge {
+    margin-left: auto;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    padding: 4px 10px;
+    border: 1px solid var(--accent-border);
+    color: var(--accent);
+    border-radius: 20px;
+    text-transform: uppercase;
+    background: var(--accent-dim);
+  }
+
+  /* Layout */
+  .main {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: sticky;
+    top: 24px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .panel-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 1.5px dashed var(--border-hover);
+    border-radius: 10px;
+    padding: 28px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: transparent;
+    position: relative;
+    overflow: hidden;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+  .drop-zone input { display: none; }
+  .drop-icon {
+    width: 36px; height: 36px;
+    margin: 0 auto 10px;
+    border-radius: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border-hover);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .drop-icon svg { width: 16px; height: 16px; stroke: var(--muted); }
+  .drop-title { font-family: var(--font-display); font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .drop-sub { font-size: 11px; color: var(--muted); }
+
+  /* Filename chip */
+  .file-chip {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 11px;
+    color: var(--accent);
+    word-break: break-all;
+  }
+  .file-chip svg { flex-shrink: 0; width: 14px; height: 14px; }
+
+  /* Grid control */
+  .grid-control {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .ctrl-block label {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .stepper {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border-hover);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface2);
+  }
+  .stepper button {
+    background: none; border: none; cursor: pointer;
+    width: 32px; height: 36px;
+    color: var(--muted);
+    font-size: 16px;
+    font-family: var(--font-mono);
+    transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stepper button:hover { background: var(--border); color: var(--text); }
+  .stepper .val {
+    flex: 1; text-align: center;
+    font-family: var(--font-display);
+    font-size: 18px; font-weight: 700;
+    color: var(--text);
+  }
+
+  /* Ratio */
+  .ratio-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .ratio-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 4px;
+    text-align: center;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+  .ratio-btn:hover { border-color: var(--border-hover); color: var(--text); }
+  .ratio-btn.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Stats */
+  .stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px; }
+  .stat-val { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--text); }
+
+  /* Download button */
+  .dl-btn {
+    width: 100%;
+    padding: 13px;
+    background: var(--accent);
+    color: #0b0b0b;
+    border: none;
+    border-radius: 10px;
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .dl-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+  .dl-btn:active { transform: translateY(0); }
+  .dl-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+  .dl-btn svg { width: 16px; height: 16px; }
+
+  /* Preview area */
+  .preview-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    min-height: 520px;
+    display: flex;
+    flex-direction: column;
+  }
+  .preview-toolbar {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .preview-label {
+    font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .preview-info {
+    margin-left: auto;
+    font-size: 11px; color: var(--muted);
+  }
+  .toggle-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px; color: var(--muted);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .toggle-btn.active { border-color: var(--accent-border); color: var(--accent); background: var(--accent-dim); }
+  .toggle-btn:hover { color: var(--text); }
+  .preview-canvas-wrap {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    padding: 28px;
+    position: relative;
+  }
+  .preview-canvas-wrap.empty::after {
+    content: 'Upload an image to preview';
+    font-size: 12px; color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+  #previewCanvas {
+    display: none;
+    max-width: 100%; max-height: 560px;
+    border-radius: 6px;
+    image-rendering: high-quality;
+  }
+
+  /* Tiles strip */
+  .tiles-strip {
+    padding: 16px 18px;
+    border-top: 1px solid var(--border);
+    display: none;
+  }
+  .tiles-strip-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); margin-bottom: 10px;
+  }
+  .tiles-thumbs {
+    display: flex; gap: 8px; overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-hover) transparent;
+    padding-bottom: 4px;
+  }
+  .tile-thumb {
+    flex-shrink: 0;
+    width: 64px; height: 64px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s;
+  }
+  .tile-thumb:hover { border-color: var(--accent-border); }
+  .tile-thumb canvas { width: 100%; height: 100%; object-fit: cover; }
+  .tile-thumb .tile-label {
+    position: absolute; bottom: 2px; left: 3px;
+    font-size: 9px; color: rgba(255,255,255,0.7);
+    background: rgba(0,0,0,0.5);
+    padding: 1px 4px; border-radius: 3px;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 4px; }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    .main { grid-template-columns: 1fr; }
+    .sidebar { position: static; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">Sli<span>ce</span></div>
+    <div class="tagline">Photo splitter</div>
+    <div class="badge">Lossless</div>
+  </header>
+
+  <div class="main">
+    <!-- Sidebar -->
+    <div class="sidebar">
+
+      <!-- Upload -->
+      <div class="panel">
+        <div class="panel-title">Image</div>
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="fileIn" accept="image/*">
+          <div class="drop-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div class="drop-title">Drop image here</div>
+          <div class="drop-sub">or click to browse</div>
+        </div>
+        <div class="file-chip" id="fileChip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span id="fileName">—</span>
+        </div>
+      </div>
+
+      <!-- Grid -->
+      <div class="panel">
+        <div class="panel-title">Grid layout</div>
+        <div class="grid-control">
+          <div class="ctrl-block">
+            <label>Columns</label>
+            <div class="stepper">
+              <button onclick="change('col',-1)">−</button>
+              <div class="val" id="colVal">2</div>
+              <button onclick="change('col',1)">+</button>
+            </div>
+          </div>
+          <div class="ctrl-block">
+            <label>Rows</label>
+            <div class="stepper">
+              <button onclick="change('row',-1)">−</button>
+              <div class="val" id="rowVal">1</div>
+              <button onclick="change('row',1)">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ratio -->
+      <div class="panel">
+        <div class="panel-title">Tile aspect ratio</div>
+        <div class="ratio-grid" id="ratioGrid">
+          <div class="ratio-btn active" data-ratio="free">Free</div>
+          <div class="ratio-btn" data-ratio="1:1">1:1</div>
+          <div class="ratio-btn" data-ratio="4:3">4:3</div>
+          <div class="ratio-btn" data-ratio="3:4">3:4</div>
+          <div class="ratio-btn" data-ratio="16:9">16:9</div>
+          <div class="ratio-btn" data-ratio="9:16">9:16</div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="panel" id="statsPanel" style="display:none">
+        <div class="panel-title">Output info</div>
+        <div class="stats-row">
+          <div class="stat">
+            <div class="stat-label">Tiles</div>
+            <div class="stat-val" id="statTiles">—</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Each tile</div>
+            <div class="stat-val" id="statSize">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Download -->
+      <button class="dl-btn" id="dlBtn" disabled onclick="downloadAll()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Download all tiles
+      </button>
+
+    </div>
+
+    <!-- Preview -->
+    <div class="preview-area">
+      <div class="preview-toolbar">
+        <div class="preview-label">Preview</div>
+        <button class="toggle-btn active" id="toggleLines" onclick="toggleLines()">Lines</button>
+        <button class="toggle-btn" id="toggleNumbers" onclick="toggleNumbers()">Numbers</button>
+        <div class="preview-info" id="previewInfo"></div>
+      </div>
+      <div class="preview-canvas-wrap empty" id="previewWrap">
+        <canvas id="previewCanvas"></canvas>
+      </div>
+      <div class="tiles-strip" id="tilesStrip">
+        <div class="tiles-strip-label">Tiles preview</div>
+        <div class="tiles-thumbs" id="thumbs"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let img = null;
+  let cols = 2, rows = 1;
+  let selectedRatio = 'free';
+  let showLines = true, showNumbers = false;
+
+  const dropZone  = document.getElementById('dropZone');
+  const fileIn    = document.getElementById('fileIn');
+  const fileChip  = document.getElementById('fileChip');
+  const fileName  = document.getElementById('fileName');
+  const previewWrap = document.getElementById('previewWrap');
+  const previewCanvas = document.getElementById('previewCanvas');
+  const ctx       = previewCanvas.getContext('2d');
+  const statsPanel = document.getElementById('statsPanel');
+  const dlBtn     = document.getElementById('dlBtn');
+  const tilesStrip = document.getElementById('tilesStrip');
+  const thumbsEl  = document.getElementById('thumbs');
+  const previewInfo = document.getElementById('previewInfo');
+
+  /* ── Upload ── */
+  dropZone.addEventListener('click', () => fileIn.click());
+  fileIn.addEventListener('change', () => { if (fileIn.files[0]) loadImage(fileIn.files[0]); });
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) loadImage(e.dataTransfer.files[0]);
+  });
+
+  function loadImage(file) {
+    const url = URL.createObjectURL(file);
+    const i = new Image();
+    i.onload = () => {
+      img = i;
+      fileChip.style.display = 'flex';
+      fileName.textContent = file.name;
+      draw();
+    };
+    i.src = url;
+  }
+
+  /* ── Steppers ── */
+  function change(which, delta) {
+    if (which === 'col') { cols = Math.max(1, Math.min(10, cols + delta)); document.getElementById('colVal').textContent = cols; }
+    else { rows = Math.max(1, Math.min(10, rows + delta)); document.getElementById('rowVal').textContent = rows; }
+    draw();
+  }
+
+  /* ── Ratio ── */
+  document.getElementById('ratioGrid').addEventListener('click', e => {
+    const btn = e.target.closest('.ratio-btn');
+    if (!btn) return;
+    document.querySelectorAll('.ratio-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedRatio = btn.dataset.ratio;
+    draw();
+  });
+
+  /* ── Toggles ── */
+  function toggleLines() {
+    showLines = !showLines;
+    document.getElementById('toggleLines').classList.toggle('active', showLines);
+    draw();
+  }
+  function toggleNumbers() {
+    showNumbers = !showNumbers;
+    document.getElementById('toggleNumbers').classList.toggle('active', showNumbers);
+    draw();
+  }
+
+  /* ── Tile dimensions ── */
+  function getTileDims() {
+    if (!img) return { tw: 0, th: 0, srcX: 0, srcY: 0, totalW: 0, totalH: 0 };
+    let tw, th;
+    if (selectedRatio === 'free') {
+      tw = img.width / cols;
+      th = img.height / rows;
+    } else {
+      const [rw, rh] = selectedRatio.split(':').map(Number);
+      tw = img.width / cols;
+      th = tw * rh / rw;
+    }
+    const totalW = tw * cols;
+    const totalH = th * rows;
+    const srcX = (img.width - totalW) / 2;
+    const srcY = (img.height - totalH) / 2;
+    return { tw, th, srcX, srcY, totalW, totalH };
+  }
+
+  /* ── Main draw ── */
+  function draw() {
+    if (!img) return;
+    const { tw, th, srcX, srcY, totalW, totalH } = getTileDims();
+
+    const maxW = previewWrap.offsetWidth - 56 || 580;
+    const maxH = 540;
+    const scale = Math.min(maxW / totalW, maxH / totalH, 1);
+    const dW = Math.round(totalW * scale);
+    const dH = Math.round(totalH * scale);
+
+    previewCanvas.width = dW;
+    previewCanvas.height = dH;
+    previewCanvas.style.display = 'block';
+    previewWrap.classList.remove('empty');
+
+    /* Draw image */
+    ctx.clearRect(0, 0, dW, dH);
+    ctx.drawImage(img, srcX, srcY, totalW, totalH, 0, 0, dW, dH);
+
+    /* Dim overlay for readability when numbers on */
+    if (showNumbers) {
+      ctx.fillStyle = 'rgba(0,0,0,0.1)';
+      ctx.fillRect(0, 0, dW, dH);
+    }
+
+    /* Grid lines */
+    if (showLines) {
+      const tW = dW / cols, tH = dH / rows;
+      ctx.save();
+      for (let c = 1; c < cols; c++) {
+        const x = Math.round(c * tW);
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, dH);
+        ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, dH);
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1; ctx.setLineDash([6,4]); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      for (let r = 1; r < rows; r++) {
+        const y = Math.round(r * tH);
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(dW, y);
+        ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(dW, y);
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1; ctx.setLineDash([6,4]); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+    }
+
+    /* Tile numbers */
+    if (showNumbers) {
+      const tW = dW / cols, tH = dH / rows;
+      ctx.save();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      let n = 1;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cx = c * tW + tW / 2, cy = r * tH + tH / 2;
+          const fs = Math.min(tW, tH) * 0.22;
+          ctx.font = `700 ${Math.max(10, fs)}px Syne, sans-serif`;
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillText(n, cx+1, cy+1);
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.fillText(n, cx, cy);
+          n++;
+        }
+      }
+      ctx.restore();
+    }
+
+    /* Stats */
+    const tw2 = Math.round(tw), th2 = Math.round(th);
+    statsPanel.style.display = 'block';
+    document.getElementById('statTiles').textContent = cols * rows;
+    document.getElementById('statSize').textContent = tw2 + '×' + th2;
+    previewInfo.textContent = tw2 + ' × ' + th2 + 'px per tile';
+    dlBtn.disabled = false;
+
+    buildThumbs(tw, th, srcX, srcY);
+  }
+
+  /* ── Thumbs ── */
+  function buildThumbs(tw, th, srcX, srcY) {
+    thumbsEl.innerHTML = '';
+    tilesStrip.style.display = 'block';
+    const size = 64;
+    let n = 1;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const wrap = document.createElement('div');
+        wrap.className = 'tile-thumb';
+        wrap.title = 'Tile ' + n;
+        const tc = document.createElement('canvas');
+        tc.width = size; tc.height = size;
+        const tctx = tc.getContext('2d');
+        const aspect = tw / th;
+        let sw = size, sh = size;
+        if (aspect > 1) { sh = size / aspect; }
+        else { sw = size * aspect; }
+        tctx.drawImage(img, srcX + c * tw, srcY + r * th, tw, th, (size-sw)/2, (size-sh)/2, sw, sh);
+        const lbl = document.createElement('div');
+        lbl.className = 'tile-label'; lbl.textContent = n;
+        wrap.appendChild(tc);
+        wrap.appendChild(lbl);
+        thumbsEl.appendChild(wrap);
+        n++;
+      }
+    }
+  }
+
+  /* ── Download ── */
+  function downloadAll() {
+    if (!img) return;
+    const { tw, th, srcX, srcY } = getTileDims();
+    const off = document.createElement('canvas');
+    off.width = Math.round(tw);
+    off.height = Math.round(th);
+    const oc = off.getContext('2d');
+    let n = 1;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        oc.clearRect(0, 0, off.width, off.height);
+        oc.drawImage(img, srcX + c * tw, srcY + r * th, tw, th, 0, 0, off.width, off.height);
+        const a = document.createElement('a');
+        a.download = 'tile_' + n + '_r' + (r+1) + 'c' + (c+1) + '.png';
+        a.href = off.toDataURL('image/png');
+        a.click();
+        n++;
+      }
+    }
+  }
+
+  /* Redraw on resize */
+  window.addEventListener('resize', () => { if (img) draw(); });
+</script>
+</body>
+</html>
